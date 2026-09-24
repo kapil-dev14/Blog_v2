@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen } from "lucide-react";
+
 import LikeButton from "@/components/blog/LikeButton";
-import { getPostBySlug, getPublishedPosts } from "@/lib/posts";
 import Comments from "@/components/blog/Comments";
+
+import {
+  getPostBySlug,
+  getPublishedPosts,
+  getSeriesChapters,
+} from "@/lib/posts";
+
 type BlogPostPageProps = {
   params: Promise<{
     slug: string;
@@ -38,7 +45,7 @@ function formatCategory(category: string) {
 }
 
 /* ========================================
-   DYNAMIC SEO
+   METADATA
 ======================================== */
 
 export async function generateMetadata({
@@ -57,12 +64,12 @@ export async function generateMetadata({
   return {
     title: post.title,
 
-    description: post.excerpt || "A piece from Her Journal.",
+    description: post.excerpt || "A piece from Aashu.",
 
     openGraph: {
       title: post.title,
 
-      description: post.excerpt || "A piece from Her Journal.",
+      description: post.excerpt || "A piece from Aashu.",
 
       type: "article",
 
@@ -87,10 +94,7 @@ export async function generateMetadata({
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const { slug } = await params;
 
-  const [post, posts] = await Promise.all([
-    getPostBySlug(slug),
-    getPublishedPosts(),
-  ]);
+  const post = await getPostBySlug(slug);
 
   if (!post) {
     notFound();
@@ -98,39 +102,97 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
   const readingTime = calculateReadingTime(post.content_html);
 
-  /*
-   * getPublishedPosts() is newest → oldest.
-   *
-   * We use the current position to find the
-   * pieces surrounding this one.
-   */
+  const isPoem = post.category === "poem";
 
-  const currentIndex = posts.findIndex((item) => item.id === post.id);
+  const isChapter =
+    post.category === "story" &&
+    Boolean(post.series_slug && post.series_title && post.chapter_number);
 
-  const newerPost = currentIndex > 0 ? posts[currentIndex - 1] : null;
+  /* =====================================
+     CHAPTER NAVIGATION
+  ===================================== */
 
-  const olderPost =
-    currentIndex >= 0 && currentIndex < posts.length - 1
-      ? posts[currentIndex + 1]
+  const chapters =
+    isChapter && post.series_slug
+      ? await getSeriesChapters(post.series_slug)
+      : [];
+
+  const chapterIndex = isChapter
+    ? chapters.findIndex((chapter) => chapter.id === post.id)
+    : -1;
+
+  const previousChapter = chapterIndex > 0 ? chapters[chapterIndex - 1] : null;
+
+  const nextChapter =
+    chapterIndex >= 0 && chapterIndex < chapters.length - 1
+      ? chapters[chapterIndex + 1]
       : null;
 
-  const isPoem = post.category === "poem";
+  /* =====================================
+     NORMAL POST NAVIGATION
+  ===================================== */
+
+  let olderPost = null;
+  let newerPost = null;
+
+  if (!isChapter) {
+    const posts = await getPublishedPosts();
+
+    const currentIndex = posts.findIndex((item) => item.id === post.id);
+
+    newerPost = currentIndex > 0 ? posts[currentIndex - 1] : null;
+
+    olderPost =
+      currentIndex >= 0 && currentIndex < posts.length - 1
+        ? posts[currentIndex + 1]
+        : null;
+  }
 
   return (
     <article className={`article-page ${isPoem ? "article-page-poem" : ""}`}>
-      {/* ====================================
-          HEADER
-      ==================================== */}
+      {/* =================================
+          ARTICLE HEADER
+      ================================= */}
 
       <header className="article-header">
         <div className="article-header-inner">
-          <Link href="/writing" className="article-back">
-            <ArrowLeft size={14} strokeWidth={1.5} />
-            All writing
+          <Link
+            href={post.category === "story" ? "/stories" : "/writing"}
+            className="article-back"
+          >
+            <ArrowLeft size={13} strokeWidth={1.4} />
+
+            {post.category === "story" ? "Stories" : "All writing"}
           </Link>
 
+          {/* SERIES */}
+
+          {isChapter && (
+            <div className="article-series-heading">
+              <BookOpen size={14} strokeWidth={1.3} />
+
+              <span>{post.series_title}</span>
+            </div>
+          )}
+
+          {/* META */}
+
           <div className="article-meta">
-            <span>{formatCategory(post.category)}</span>
+            {isChapter ? (
+              <>
+                <span>
+                  Chapter {String(post.chapter_number).padStart(2, "0")}
+                </span>
+
+                <span>•</span>
+
+                <span>
+                  {chapterIndex + 1} of {chapters.length}
+                </span>
+              </>
+            ) : (
+              <span>{formatCategory(post.category)}</span>
+            )}
 
             <span>•</span>
 
@@ -149,9 +211,9 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </div>
       </header>
 
-      {/* ====================================
+      {/* =================================
           COVER
-      ==================================== */}
+      ================================= */}
 
       {post.cover_image && (
         <div className="article-cover-section">
@@ -165,13 +227,19 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </div>
       )}
 
-      {/* ====================================
-          WRITING
-      ==================================== */}
+      {/* =================================
+          CONTENT
+      ================================= */}
 
       <div className="article-layout">
         <aside className="article-side">
-          <span>{isPoem ? "VERSE" : "WORDS"}</span>
+          <span>
+            {isPoem
+              ? "VERSE"
+              : isChapter
+                ? `CHAPTER ${String(post.chapter_number).padStart(2, "0")}`
+                : "WORDS"}
+          </span>
 
           <div />
         </aside>
@@ -185,38 +253,123 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
         <aside className="article-side article-side-right">
           <div />
+
           <span>✦</span>
         </aside>
       </div>
 
-      {/* ====================================
-          END
-      ==================================== */}
+      {/* =================================
+          REACTION / ARTICLE END
+      ================================= */}
 
-      <footer className="article-end">
-        <span className="article-end-mark">✦</span>
-        <section className="article-reaction">
+      <section className="reader-response">
+        <div className="reader-response-inner">
           <LikeButton postId={post.id} />
-        </section>
-        <Comments postId={post.id} />
+
+          <a href="#comments" className="reader-comment-link">
+            Join the conversation
+            <ArrowUpRight size={13} strokeWidth={1.3} />
+          </a>
+        </div>
+      </section>
+
+      <section className="article-farewell">
+        <span>✦</span>
 
         <p>
           {isPoem
             ? "Some words are meant to linger."
             : "Thank you for staying until the last line."}
         </p>
+      </section>
 
-        <Link href="/writing">
-          Back to all writing
-          <ArrowUpRight size={13} strokeWidth={1.3} />
-        </Link>
-      </footer>
+      {/* =================================
+          CHAPTER NAVIGATION
+      ================================= */}
 
-      {/* ====================================
-          PREVIOUS / NEXT
-      ==================================== */}
+      {isChapter && chapters.length > 0 && (
+        <section className="chapter-navigation-section">
+          <div className="chapter-navigation-top">
+            <span>{post.series_title}</span>
 
-      {(olderPost || newerPost) && (
+            <strong>
+              {chapters.length} {chapters.length === 1 ? "chapter" : "chapters"}
+            </strong>
+          </div>
+
+          <nav className="chapter-navigation" aria-label="Story chapters">
+            {previousChapter ? (
+              <Link
+                href={`/blog/${previousChapter.slug}`}
+                className="chapter-nav-side chapter-nav-previous"
+              >
+                <span>
+                  <ArrowLeft size={13} />
+                  Previous chapter
+                </span>
+
+                <strong>
+                  {String(previousChapter.chapter_number).padStart(2, "0")}.{" "}
+                  {previousChapter.title}
+                </strong>
+              </Link>
+            ) : (
+              <div className="chapter-nav-side chapter-nav-empty" />
+            )}
+
+            <details className="chapter-all">
+              <summary>
+                <BookOpen size={14} strokeWidth={1.3} />
+
+                <span>All chapters</span>
+              </summary>
+
+              <div className="chapter-all-list">
+                {chapters.map((chapter) => (
+                  <Link
+                    key={chapter.id}
+                    href={`/blog/${chapter.slug}`}
+                    className={chapter.id === post.id ? "chapter-current" : ""}
+                  >
+                    <span>
+                      {String(chapter.chapter_number).padStart(2, "0")}
+                    </span>
+
+                    <strong>{chapter.title}</strong>
+
+                    {chapter.id === post.id && <small>Reading</small>}
+                  </Link>
+                ))}
+              </div>
+            </details>
+
+            {nextChapter ? (
+              <Link
+                href={`/blog/${nextChapter.slug}`}
+                className="chapter-nav-side chapter-nav-next"
+              >
+                <span>
+                  Next chapter
+                  <ArrowRight size={13} />
+                </span>
+
+                <strong>
+                  {String(nextChapter.chapter_number).padStart(2, "0")}.{" "}
+                  {nextChapter.title}
+                </strong>
+              </Link>
+            ) : (
+              <div className="chapter-nav-side chapter-nav-empty" />
+            )}
+          </nav>
+        </section>
+      )}
+
+      {/* =================================
+          NORMAL PREVIOUS / NEXT
+      ================================= */}
+
+      {!isChapter && (olderPost || newerPost) && (
         <nav className="article-navigation" aria-label="More writing">
           {olderPost ? (
             <Link
@@ -224,8 +377,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
               className="article-navigation-item article-navigation-previous"
             >
               <span className="article-navigation-label">
-                <ArrowLeft size={13} strokeWidth={1.3} />
-                Older
+                <ArrowLeft size={13} />
+                Previous writing
               </span>
 
               <strong>{olderPost.title}</strong>
@@ -240,8 +393,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
               className="article-navigation-item article-navigation-next"
             >
               <span className="article-navigation-label">
-                Newer
-                <ArrowRight size={13} strokeWidth={1.3} />
+                Next writing
+                <ArrowRight size={13} />
               </span>
 
               <strong>{newerPost.title}</strong>
@@ -251,6 +404,26 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
           )}
         </nav>
       )}
+
+      {/* =================================
+          COMMENTS
+      ================================= */}
+
+      <Comments postId={post.id} />
+
+      {/* =================================
+          BACK
+      ================================= */}
+
+      <div className="article-bottom-link">
+        <Link href={post.category === "story" ? "/stories" : "/writing"}>
+          <ArrowLeft size={12} />
+
+          {post.category === "story"
+            ? "Back to stories"
+            : "Back to all writing"}
+        </Link>
+      </div>
     </article>
   );
 }

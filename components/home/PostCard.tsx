@@ -11,6 +11,22 @@ type PostCardProps = {
   href: string;
 };
 
+function formatCategory(category: string) {
+  if (category === "poem") {
+    return "Poetry";
+  }
+
+  if (category === "story") {
+    return "Story";
+  }
+
+  if (category === "journal") {
+    return "Journal";
+  }
+
+  return "Thoughts";
+}
+
 export default function PostCard({
   number,
   category,
@@ -21,9 +37,11 @@ export default function PostCard({
   href,
 }: PostCardProps) {
   return (
-    <article className={`post-card ${image ? "post-card-with-image" : ""}`}>
-      {/* IMAGE */}
-
+    <article
+      className={`post-card ${
+        image ? "post-card-with-image" : "post-card-without-image"
+      }`}
+    >
       {image && (
         <Link
           href={href}
@@ -31,18 +49,16 @@ export default function PostCard({
           aria-label={`Read ${title}`}
         >
           <img src={image} alt={title} loading="lazy" />
+
+          <span>{number}</span>
         </Link>
       )}
 
-      {/* TOP */}
-
       <div className="post-card-top">
-        <span>{number}</span>
+        {!image && <span>{number}</span>}
 
-        <span>{category}</span>
+        <span>{formatCategory(category)}</span>
       </div>
-
-      {/* CONTENT */}
 
       <div className="post-card-content">
         {date && <span className="post-card-date">{date}</span>}
@@ -51,17 +67,16 @@ export default function PostCard({
           <h3>{title}</h3>
         </Link>
 
-        {excerpt && <p>{excerpt}</p>}
+        {excerpt && <p className="post-excerpt">{excerpt}</p>}
       </div>
-
-      {/* ARROW */}
 
       <Link
         href={href}
         className="post-card-arrow"
         aria-label={`Read ${title}`}
       >
-        <ArrowUpRight size={16} strokeWidth={1.2} />
+        Read
+        <ArrowUpRight size={14} strokeWidth={1.2} />
       </Link>
     </article>
   );

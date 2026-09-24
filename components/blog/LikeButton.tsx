@@ -120,25 +120,23 @@ export default function LikeButton({ postId }: LikeButtonProps) {
   }
 
   return (
-    <div className="article-like">
-      <button
-        type="button"
-        onClick={toggleLike}
-        disabled={loading || changing}
-        className={liked ? "liked" : ""}
-        aria-pressed={liked}
-        aria-label={liked ? "Unlike this piece" : "Like this piece"}
-      >
-        <Heart
-          size={19}
-          strokeWidth={1.3}
-          fill={liked ? "currentColor" : "none"}
-        />
+    <button
+      type="button"
+      onClick={toggleLike}
+      disabled={loading || changing}
+      className={`reader-like-button ${liked ? "liked" : ""}`}
+      aria-pressed={liked}
+      aria-label={liked ? "Unlike this piece" : "Like this piece"}
+    >
+      <Heart
+        size={16}
+        strokeWidth={1.4}
+        fill={liked ? "currentColor" : "none"}
+      />
 
-        <span>{loading ? "..." : likes}</span>
-      </button>
+      <span>{loading ? "..." : likes}</span>
 
-      <p>{liked ? "You liked this piece." : "Leave a little love."}</p>
-    </div>
+      <small>{liked ? "Liked" : "Like"}</small>
+    </button>
   );
 }

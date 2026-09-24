@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ImagePlus, Loader2 } from "lucide-react";
+import { ArrowLeft, BookOpen, ImagePlus, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/client";
@@ -27,11 +27,9 @@ export default function PostEditor({ post }: PostEditorProps) {
   const router = useRouter();
   const supabase = createClient();
 
-  // --------------------------------------------------
-  // FORM STATE
-  // If editing, use existing post values.
-  // If creating, start with empty values.
-  // --------------------------------------------------
+  // ==================================================
+  // BASIC POST STATE
+  // ==================================================
 
   const [title, setTitle] = useState(post?.title ?? "");
 
@@ -47,34 +45,55 @@ export default function PostEditor({ post }: PostEditorProps) {
 
   const [featured, setFeatured] = useState(post?.featured ?? false);
 
+  // ==================================================
+  // STORY / CHAPTER STATE
+  // ==================================================
+
+  const [seriesTitle, setSeriesTitle] = useState(post?.series_title ?? "");
+
+  const [seriesSlug, setSeriesSlug] = useState(post?.series_slug ?? "");
+
+  const [seriesSlugEdited, setSeriesSlugEdited] = useState(
+    Boolean(post?.series_slug),
+  );
+
+  const [chapterNumber, setChapterNumber] = useState(
+    post?.chapter_number ? String(post.chapter_number) : "",
+  );
+
+  // ==================================================
+  // COVER IMAGE
+  // ==================================================
+
   const [coverFile, setCoverFile] = useState<File | null>(null);
 
-  // Existing image will appear while editing.
   const [coverPreview, setCoverPreview] = useState(post?.cover_image ?? "");
+
+  // ==================================================
+  // STATUS
+  // ==================================================
 
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState("");
 
-  // --------------------------------------------------
+  // ==================================================
   // TITLE
-  // --------------------------------------------------
+  // ==================================================
 
   function handleTitleChange(event: ChangeEvent<HTMLInputElement>) {
     const newTitle = event.target.value;
 
     setTitle(newTitle);
 
-    // Automatically generate slug for new posts.
-    // Once user manually edits slug, stop overwriting it.
     if (!slugEdited) {
       setSlug(createSlug(newTitle));
     }
   }
 
-  // --------------------------------------------------
-  // SLUG
-  // --------------------------------------------------
+  // ==================================================
+  // POST SLUG
+  // ==================================================
 
   function handleSlugChange(event: ChangeEvent<HTMLInputElement>) {
     setSlugEdited(true);
@@ -82,9 +101,55 @@ export default function PostEditor({ post }: PostEditorProps) {
     setSlug(createSlug(event.target.value));
   }
 
-  // --------------------------------------------------
+  // ==================================================
+  // SERIES TITLE
+  // ==================================================
+
+  function handleSeriesTitleChange(event: ChangeEvent<HTMLInputElement>) {
+    const value = event.target.value;
+
+    setSeriesTitle(value);
+
+    if (!seriesSlugEdited) {
+      setSeriesSlug(createSlug(value));
+    }
+  }
+
+  // ==================================================
+  // SERIES SLUG
+  // ==================================================
+
+  function handleSeriesSlugChange(event: ChangeEvent<HTMLInputElement>) {
+    setSeriesSlugEdited(true);
+
+    setSeriesSlug(createSlug(event.target.value));
+  }
+
+  // ==================================================
+  // CATEGORY
+  // ==================================================
+
+  function handleCategoryChange(event: ChangeEvent<HTMLSelectElement>) {
+    const newCategory = event.target.value;
+
+    setCategory(newCategory);
+
+    /*
+      We intentionally do NOT erase series data when
+      switching away from Story.
+
+      This means if you accidentally select Poetry and
+      switch back to Story, your chapter information is
+      still there.
+
+      When saving a non-story post, those fields are
+      stored as null.
+    */
+  }
+
+  // ==================================================
   // COVER IMAGE
-  // --------------------------------------------------
+  // ==================================================
 
   function handleCoverChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -99,8 +164,6 @@ export default function PostEditor({ post }: PostEditorProps) {
   }
 
   async function uploadCoverImage() {
-    // Editing a post without selecting another image:
-    // keep the old image.
     if (!coverFile) {
       return post?.cover_image ?? null;
     }
@@ -133,25 +196,71 @@ export default function PostEditor({ post }: PostEditorProps) {
     return data.publicUrl;
   }
 
-  // --------------------------------------------------
-  // SAVE / UPDATE POST
-  // --------------------------------------------------
+  // ==================================================
+  // VALIDATION
+  // ==================================================
+
+  function validatePost() {
+    if (!title.trim()) {
+      return "Give this piece a title first.";
+    }
+
+    if (!slug.trim()) {
+      return "The post needs a slug.";
+    }
+
+    if (!content.trim() || content === "<p></p>") {
+      return "Write something before saving.";
+    }
+
+    /*
+      Story rules:
+
+      A story CAN be standalone.
+
+      But once any series/chapter information is entered,
+      we require all three values.
+    */
+
+    if (category === "story") {
+      const hasAnySeriesInformation =
+        seriesTitle.trim() || seriesSlug.trim() || chapterNumber.trim();
+
+      if (hasAnySeriesInformation) {
+        if (!seriesTitle.trim()) {
+          return "Give this story series a title.";
+        }
+
+        if (!seriesSlug.trim()) {
+          return "The story series needs a slug.";
+        }
+
+        if (!chapterNumber.trim()) {
+          return "Enter the chapter number.";
+        }
+
+        const chapter = Number(chapterNumber);
+
+        if (!Number.isInteger(chapter) || chapter < 1) {
+          return "Chapter number must be 1 or greater.";
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // ==================================================
+  // SAVE / UPDATE
+  // ==================================================
 
   async function savePost(publish: boolean) {
     setError("");
 
-    if (!title.trim()) {
-      setError("Give this piece a title first.");
-      return;
-    }
+    const validationError = validatePost();
 
-    if (!slug.trim()) {
-      setError("The post needs a slug.");
-      return;
-    }
-
-    if (!content.trim() || content === "<p></p>") {
-      setError("Write something before saving.");
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -160,8 +269,17 @@ export default function PostEditor({ post }: PostEditorProps) {
     try {
       const coverImage = await uploadCoverImage();
 
+      const isStory = category === "story";
+
+      const hasSeries =
+        isStory &&
+        Boolean(
+          seriesTitle.trim() && seriesSlug.trim() && chapterNumber.trim(),
+        );
+
       const postData = {
         title: title.trim(),
+
         slug: slug.trim(),
 
         excerpt: excerpt.trim() || null,
@@ -176,16 +294,28 @@ export default function PostEditor({ post }: PostEditorProps) {
 
         published: publish,
 
-        // If already published, preserve the original
-        // published date when updating it.
+        // ------------------------------------------
+        // STORY / CHAPTER INFORMATION
+        // ------------------------------------------
+
+        series_title: hasSeries ? seriesTitle.trim() : null,
+
+        series_slug: hasSeries ? seriesSlug.trim() : null,
+
+        chapter_number: hasSeries ? Number(chapterNumber) : null,
+
+        // ------------------------------------------
+        // PUBLISHING
+        // ------------------------------------------
+
         published_at: publish
           ? (post?.published_at ?? new Date().toISOString())
           : null,
       };
 
-      // ------------------------------------------------
-      // EDIT EXISTING POST
-      // ------------------------------------------------
+      // =================================================
+      // UPDATE
+      // =================================================
 
       if (post) {
         const { error: updateError } = await supabase
@@ -198,9 +328,9 @@ export default function PostEditor({ post }: PostEditorProps) {
         }
       }
 
-      // ------------------------------------------------
-      // CREATE NEW POST
-      // ------------------------------------------------
+      // =================================================
+      // CREATE
+      // =================================================
       else {
         const { error: insertError } = await supabase
           .from("posts")
@@ -212,6 +342,7 @@ export default function PostEditor({ post }: PostEditorProps) {
       }
 
       router.push("/admin");
+
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -222,20 +353,25 @@ export default function PostEditor({ post }: PostEditorProps) {
     }
   }
 
-  // Save Draft button submits the form.
+  // ==================================================
+  // FORM SUBMIT = SAVE DRAFT
+  // ==================================================
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     savePost(false);
   }
 
-  // --------------------------------------------------
+  // ==================================================
   // UI
-  // --------------------------------------------------
+  // ==================================================
 
   return (
     <form className="post-editor" onSubmit={handleSubmit}>
-      {/* HEADER */}
+      {/* ============================================
+          HEADER
+      ============================================ */}
 
       <header className="post-editor-header">
         <Link href="/admin" className="post-editor-back">
@@ -268,7 +404,9 @@ export default function PostEditor({ post }: PostEditorProps) {
         </div>
       </header>
 
-      {/* INTRO */}
+      {/* ============================================
+          INTRO
+      ============================================ */}
 
       <div className="post-editor-intro">
         <span>{post ? "EDIT ENTRY" : "NEW ENTRY"}</span>
@@ -290,11 +428,15 @@ export default function PostEditor({ post }: PostEditorProps) {
         </h1>
       </div>
 
-      {/* ERROR */}
+      {/* ============================================
+          ERROR
+      ============================================ */}
 
       {error && <div className="post-editor-error">{error}</div>}
 
-      {/* TITLE */}
+      {/* ============================================
+          TITLE
+      ============================================ */}
 
       <div className="post-editor-field title-field">
         <label htmlFor="title">Title</label>
@@ -308,7 +450,9 @@ export default function PostEditor({ post }: PostEditorProps) {
         />
       </div>
 
-      {/* SLUG */}
+      {/* ============================================
+          SLUG
+      ============================================ */}
 
       <div className="post-editor-field">
         <label htmlFor="slug">Slug</label>
@@ -325,7 +469,9 @@ export default function PostEditor({ post }: PostEditorProps) {
         </div>
       </div>
 
-      {/* CATEGORY + COVER IMAGE */}
+      {/* ============================================
+          CATEGORY + COVER
+      ============================================ */}
 
       <div className="post-editor-grid">
         <div className="post-editor-field">
@@ -334,7 +480,7 @@ export default function PostEditor({ post }: PostEditorProps) {
           <select
             id="category"
             value={category}
-            onChange={(event) => setCategory(event.target.value)}
+            onChange={handleCategoryChange}
           >
             <option value="thoughts">Thoughts</option>
 
@@ -368,7 +514,94 @@ export default function PostEditor({ post }: PostEditorProps) {
         </div>
       </div>
 
-      {/* IMAGE PREVIEW */}
+      {/* ============================================
+          STORY / SERIES
+      ============================================ */}
+
+      {category === "story" && (
+        <section className="story-series-editor">
+          <div className="story-series-heading">
+            <div className="story-series-icon">
+              <BookOpen size={17} strokeWidth={1.4} />
+            </div>
+
+            <div>
+              <span>STORY SERIES</span>
+
+              <h2>Is this part of a larger story?</h2>
+
+              <p>
+                Leave these fields empty for a standalone story. Fill them in
+                when this piece is one chapter of a series.
+              </p>
+            </div>
+          </div>
+
+          <div className="story-series-fields">
+            {/* SERIES TITLE */}
+
+            <div className="post-editor-field">
+              <label htmlFor="series-title">Series title</label>
+
+              <input
+                id="series-title"
+                value={seriesTitle}
+                onChange={handleSeriesTitleChange}
+                placeholder="e.g. The House Beyond the Hill"
+              />
+
+              <small className="editor-field-note">
+                Use the same title for every chapter in this story.
+              </small>
+            </div>
+
+            {/* SERIES SLUG */}
+
+            <div className="post-editor-field">
+              <label htmlFor="series-slug">Series slug</label>
+
+              <div className="slug-input">
+                <span>/stories/</span>
+
+                <input
+                  id="series-slug"
+                  value={seriesSlug}
+                  onChange={handleSeriesSlugChange}
+                  placeholder="the-house-beyond-the-hill"
+                />
+              </div>
+
+              <small className="editor-field-note">
+                Chapters with the same series slug will be connected.
+              </small>
+            </div>
+
+            {/* CHAPTER */}
+
+            <div className="post-editor-field chapter-number-field">
+              <label htmlFor="chapter-number">Chapter number</label>
+
+              <input
+                id="chapter-number"
+                type="number"
+                min="1"
+                step="1"
+                value={chapterNumber}
+                onChange={(event) => setChapterNumber(event.target.value)}
+                placeholder="1"
+              />
+
+              <small className="editor-field-note">
+                Determines the reading order.
+              </small>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ============================================
+          IMAGE PREVIEW
+      ============================================ */}
 
       {coverPreview && (
         <div className="cover-preview">
@@ -379,7 +612,9 @@ export default function PostEditor({ post }: PostEditorProps) {
         </div>
       )}
 
-      {/* EXCERPT */}
+      {/* ============================================
+          EXCERPT
+      ============================================ */}
 
       <div className="post-editor-field">
         <label htmlFor="excerpt">Excerpt</label>
@@ -393,7 +628,9 @@ export default function PostEditor({ post }: PostEditorProps) {
         />
       </div>
 
-      {/* WRITING */}
+      {/* ============================================
+          WRITING
+      ============================================ */}
 
       <div className="post-editor-field">
         <label>Writing</label>
@@ -401,7 +638,9 @@ export default function PostEditor({ post }: PostEditorProps) {
         <RichTextEditor value={content} onChange={setContent} />
       </div>
 
-      {/* FEATURED */}
+      {/* ============================================
+          FEATURED
+      ============================================ */}
 
       <label className="featured-checkbox">
         <input

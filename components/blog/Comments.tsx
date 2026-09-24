@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
-import { Loader2, MessageCircle } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 
@@ -71,6 +71,7 @@ export default function Comments({ postId }: CommentsProps) {
     setError("");
 
     const cleanName = name.trim();
+
     const cleanComment = comment.trim();
 
     if (!cleanName) {
@@ -129,107 +130,49 @@ export default function Comments({ postId }: CommentsProps) {
   }
 
   return (
-    <section className="comments-section" id="comments">
-      <div className="comments-heading">
-        <div>
-          <span className="eyebrow">CONVERSATION</span>
+    <section className="comments-section comments-compact" id="comments">
+      {/* HEADER */}
 
-          <h2>Comments.</h2>
+      <div className="comments-compact-heading">
+        <div>
+          <span>CONVERSATION</span>
+
+          <h2>
+            Comments
+            <em>{String(comments.length).padStart(2, "0")}</em>
+          </h2>
         </div>
 
-        <span className="comments-count">
-          {String(comments.length).padStart(2, "0")}
-        </span>
+        <p>Leave something behind.</p>
       </div>
 
-      {/* FORM */}
+      {/* EXISTING COMMENTS */}
 
-      <form className="comment-form" onSubmit={handleSubmit}>
-        <div className="comment-form-intro">
-          <MessageCircle size={18} strokeWidth={1.2} />
-
-          <div>
-            <h3>Leave a thought.</h3>
-
-            <p>A few words are enough.</p>
-          </div>
-        </div>
-
-        <div className="comment-field">
-          <label htmlFor="comment-name">Name</label>
-
-          <input
-            id="comment-name"
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Your name"
-            maxLength={50}
-            autoComplete="name"
-          />
-        </div>
-
-        <div className="comment-field">
-          <label htmlFor="comment-body">Comment</label>
-
-          <textarea
-            id="comment-body"
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-            placeholder="Write something..."
-            maxLength={1000}
-            rows={5}
-          />
-
-          <span className="comment-limit">{comment.length}/1000</span>
-        </div>
-
-        {error && (
-          <p className="comment-error" role="alert">
-            {error}
-          </p>
-        )}
-
-        <button type="submit" className="comment-submit" disabled={submitting}>
-          {submitting ? (
-            <>
-              <Loader2 size={14} className="spin" />
-              Posting...
-            </>
-          ) : (
-            "Post comment"
-          )}
-        </button>
-      </form>
-
-      {/* COMMENTS */}
-
-      <div className="comments-list">
+      <div className="comments-compact-list">
         {loading ? (
-          <div className="comments-loading">
-            <Loader2 size={17} className="spin" />
-
-            <span>Loading comments...</span>
+          <div className="comments-compact-status">
+            <Loader2 size={14} className="spin" />
+            Loading comments...
           </div>
         ) : comments.length === 0 ? (
-          <div className="comments-empty">
+          <div className="comments-compact-empty">
             <span>✦</span>
 
             <p>No comments yet. Perhaps yours will be the first.</p>
           </div>
         ) : (
           comments.map((item, index) => (
-            <article key={item.id} className="comment-item">
-              <div className="comment-number">
+            <article key={item.id} className="comment-compact-item">
+              <span className="comment-compact-number">
                 {String(index + 1).padStart(2, "0")}
-              </div>
+              </span>
 
-              <div className="comment-body">
-                <div className="comment-meta">
+              <div className="comment-compact-content">
+                <header>
                   <strong>{item.name}</strong>
 
-                  <span>{formatCommentDate(item.created_at)}</span>
-                </div>
+                  <time>{formatCommentDate(item.created_at)}</time>
+                </header>
 
                 <p>{item.comment}</p>
               </div>
@@ -237,6 +180,66 @@ export default function Comments({ postId }: CommentsProps) {
           ))
         )}
       </div>
+
+      {/* FORM */}
+
+      <form className="comment-compact-form" onSubmit={handleSubmit}>
+        <div className="comment-compact-name">
+          <label htmlFor="comment-name">Your name</label>
+
+          <input
+            id="comment-name"
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Name"
+            maxLength={50}
+            autoComplete="name"
+          />
+        </div>
+
+        <div className="comment-compact-message">
+          <label htmlFor="comment-body">Leave a thought</label>
+
+          <textarea
+            id="comment-body"
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            placeholder="A few words are enough..."
+            maxLength={1000}
+            rows={3}
+          />
+
+          <span>
+            {comment.length}
+            /1000
+          </span>
+        </div>
+
+        {error && (
+          <p className="comment-compact-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="comment-compact-submit"
+        >
+          {submitting ? (
+            <>
+              <Loader2 size={13} className="spin" />
+              Posting
+            </>
+          ) : (
+            <>
+              Post comment
+              <Send size={12} />
+            </>
+          )}
+        </button>
+      </form>
     </section>
   );
 }

@@ -1,14 +1,51 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BookOpen } from "lucide-react";
 
-import { getPublishedPosts } from "@/lib/posts";
+import { getPublishedStories } from "@/lib/posts";
+import type { Post } from "@/types/post";
 
 export const metadata: Metadata = {
   title: "Stories",
   description:
     "Stories about people, places, memories and the moments between them.",
 };
+
+/* ========================================
+   TYPES
+======================================== */
+
+type StorySeries = {
+  type: "series";
+
+  key: string;
+
+  title: string;
+
+  chapters: Post[];
+
+  firstChapter: Post;
+
+  latestChapter: Post;
+
+  coverImage: string | null;
+
+  excerpt: string | null;
+};
+
+type StandaloneStory = {
+  type: "standalone";
+
+  key: string;
+
+  post: Post;
+};
+
+type StoryCollectionItem = StorySeries | StandaloneStory;
+
+/* ========================================
+   DATE
+======================================== */
 
 function formatDate(date: string | null) {
   if (!date) return "";
@@ -20,17 +57,133 @@ function formatDate(date: string | null) {
   }).format(new Date(date));
 }
 
+/* ========================================
+   GROUP STORIES
+======================================== */
+
+function buildStoryCollections(stories: Post[]): StoryCollectionItem[] {
+  const seriesMap = new Map<string, Post[]>();
+
+  const standaloneStories: Post[] = [];
+
+  for (const story of stories) {
+    /*
+      A post only counts as a chapter when all
+      important series fields exist.
+    */
+
+    if (story.series_slug && story.series_title && story.chapter_number) {
+      const existing = seriesMap.get(story.series_slug) ?? [];
+
+      existing.push(story);
+
+      seriesMap.set(story.series_slug, existing);
+    } else {
+      standaloneStories.push(story);
+    }
+  }
+
+  const seriesItems: StorySeries[] = Array.from(seriesMap.entries()).map(
+    ([seriesSlug, chapters]) => {
+      /*
+          Chapter order:
+          1 → 2 → 3 → 4...
+        */
+
+      const orderedChapters = [...chapters].sort(
+        (a, b) => (a.chapter_number ?? 0) - (b.chapter_number ?? 0),
+      );
+
+      const firstChapter = orderedChapters[0];
+
+      /*
+          Latest chapter based on published date.
+        */
+
+      const latestChapter = [...orderedChapters].sort((a, b) => {
+        const aDate = a.published_at ? new Date(a.published_at).getTime() : 0;
+
+        const bDate = b.published_at ? new Date(b.published_at).getTime() : 0;
+
+        return bDate - aDate;
+      })[0];
+
+      /*
+          Prefer Chapter 1's cover/excerpt.
+          If unavailable, find another chapter
+          containing one.
+        */
+
+      const coverImage =
+        firstChapter.cover_image ??
+        orderedChapters.find((chapter) => chapter.cover_image)?.cover_image ??
+        null;
+
+      const excerpt =
+        firstChapter.excerpt ??
+        orderedChapters.find((chapter) => chapter.excerpt)?.excerpt ??
+        null;
+
+      return {
+        type: "series",
+        key: `series-${seriesSlug}`,
+        title: firstChapter.series_title ?? "Untitled Story",
+        chapters: orderedChapters,
+        firstChapter,
+        latestChapter,
+        coverImage,
+        excerpt,
+      };
+    },
+  );
+
+  const standaloneItems: StandaloneStory[] = standaloneStories.map((post) => ({
+    type: "standalone",
+    key: `story-${post.id}`,
+    post,
+  }));
+
+  /*
+    Put series + standalone stories together.
+
+    Then sort by most recent activity.
+  */
+
+  const collections: StoryCollectionItem[] = [
+    ...seriesItems,
+    ...standaloneItems,
+  ];
+
+  return collections.sort((a, b) => {
+    const aDate =
+      a.type === "series" ? a.latestChapter.published_at : a.post.published_at;
+
+    const bDate =
+      b.type === "series" ? b.latestChapter.published_at : b.post.published_at;
+
+    const aTime = aDate ? new Date(aDate).getTime() : 0;
+
+    const bTime = bDate ? new Date(bDate).getTime() : 0;
+
+    return bTime - aTime;
+  });
+}
+
+/* ========================================
+   PAGE
+======================================== */
+
 export default async function StoriesPage() {
-  const posts = await getPublishedPosts();
+  const stories = await getPublishedStories();
 
-  const stories = posts.filter((post) => post.category === "story");
-
-  const [firstStory, ...otherStories] = stories;
+  const collections = buildStoryCollections(stories);
 
   return (
     <section className="stories-page">
       <div className="stories-page-inner">
-        {/* INTRO */}
+        {/* ====================================
+            INTRO
+        ==================================== */}
 
         <header className="stories-intro">
           <div>
@@ -50,9 +203,11 @@ export default async function StoriesPage() {
           </p>
         </header>
 
-        {/* EMPTY STATE */}
+        {/* ====================================
+            EMPTY
+        ==================================== */}
 
-        {stories.length === 0 ? (
+        {collections.length === 0 ? (
           <div className="stories-empty">
             <span>✦</span>
 
@@ -65,105 +220,167 @@ export default async function StoriesPage() {
             </p>
           </div>
         ) : (
-          <>
-            {/* FIRST / LEAD STORY */}
+          <div className="story-library">
+            {collections.map((collection, index) => {
+              /* ============================
+                   CONNECTED STORY
+                ============================ */
 
-            {firstStory && (
-              <article className="story-lead">
-                {firstStory.cover_image ? (
-                  <Link
-                    href={`/blog/${firstStory.slug}`}
-                    className="story-lead-image"
-                  >
-                    <img src={firstStory.cover_image} alt="" />
-                  </Link>
-                ) : (
-                  <div className="story-lead-placeholder">
-                    <span>✦</span>
-                  </div>
-                )}
+              if (collection.type === "series") {
+                const {
+                  title,
+                  chapters,
+                  firstChapter,
+                  latestChapter,
+                  coverImage,
+                  excerpt,
+                } = collection;
 
-                <div className="story-lead-content">
-                  <div className="story-lead-meta">
-                    <span>01</span>
+                return (
+                  <article key={collection.key} className="story-series-card">
+                    {/* IMAGE */}
 
-                    <span>{formatDate(firstStory.published_at)}</span>
-                  </div>
+                    <Link
+                      href={`/blog/${firstChapter.slug}`}
+                      className="story-series-cover"
+                    >
+                      {coverImage ? (
+                        <img src={coverImage} alt="" />
+                      ) : (
+                        <div className="story-series-placeholder">
+                          <BookOpen size={26} strokeWidth={1} />
 
-                  <Link
-                    href={`/blog/${firstStory.slug}`}
-                    className="story-lead-title"
-                  >
-                    <h2>{firstStory.title}</h2>
-                  </Link>
+                          <span>✦</span>
+                        </div>
+                      )}
 
-                  {firstStory.excerpt && <p>{firstStory.excerpt}</p>}
-
-                  <Link
-                    href={`/blog/${firstStory.slug}`}
-                    className="story-read-link"
-                  >
-                    Read the story
-                    <ArrowRight size={15} />
-                  </Link>
-                </div>
-              </article>
-            )}
-
-            {/* OTHER STORIES */}
-
-            {otherStories.length > 0 && (
-              <div className="stories-collection">
-                <div className="stories-collection-heading">
-                  <span>MORE STORIES</span>
-
-                  <span>{String(otherStories.length).padStart(2, "0")}</span>
-                </div>
-
-                {otherStories.map((story, index) => (
-                  <article key={story.id} className="story-row">
-                    <span className="story-row-number">
-                      {String(index + 2).padStart(2, "0")}
-                    </span>
-
-                    {story.cover_image && (
-                      <Link
-                        href={`/blog/${story.slug}`}
-                        className="story-row-image"
-                      >
-                        <img src={story.cover_image} alt="" loading="lazy" />
-                      </Link>
-                    )}
-
-                    <div className="story-row-content">
-                      <span className="story-row-date">
-                        {formatDate(story.published_at)}
+                      <span className="story-series-index">
+                        {String(index + 1).padStart(2, "0")}
                       </span>
+                    </Link>
 
-                      <Link href={`/blog/${story.slug}`}>
-                        <h2>{story.title}</h2>
+                    {/* CONTENT */}
+
+                    <div className="story-series-content">
+                      <div className="story-series-meta">
+                        <span>SERIAL STORY</span>
+
+                        <span>
+                          {chapters.length}{" "}
+                          {chapters.length === 1 ? "chapter" : "chapters"}
+                        </span>
+                      </div>
+
+                      <Link
+                        href={`/blog/${firstChapter.slug}`}
+                        className="story-series-title"
+                      >
+                        <h2>{title}</h2>
                       </Link>
 
-                      {story.excerpt && <p>{story.excerpt}</p>}
+                      {excerpt && (
+                        <p className="story-series-excerpt">{excerpt}</p>
+                      )}
+
+                      {/* CHAPTER LIST */}
+
+                      <div className="story-chapter-preview">
+                        {chapters.slice(0, 4).map((chapter) => (
+                          <Link
+                            key={chapter.id}
+                            href={`/blog/${chapter.slug}`}
+                            className="story-chapter-preview-item"
+                          >
+                            <span>
+                              {String(chapter.chapter_number).padStart(2, "0")}
+                            </span>
+
+                            <strong>{chapter.title}</strong>
+
+                            <ArrowUpRight size={14} strokeWidth={1.2} />
+                          </Link>
+                        ))}
+
+                        {chapters.length > 4 && (
+                          <div className="story-more-chapters">
+                            +{chapters.length - 4} more{" "}
+                            {chapters.length - 4 === 1 ? "chapter" : "chapters"}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* FOOTER */}
+
+                      <div className="story-series-footer">
+                        <span>
+                          Updated {formatDate(latestChapter.published_at)}
+                        </span>
+
+                        <Link href={`/blog/${firstChapter.slug}`}>
+                          Begin reading
+                          <ArrowRight size={14} />
+                        </Link>
+                      </div>
                     </div>
+                  </article>
+                );
+              }
+
+              /* ============================
+                   STANDALONE STORY
+                ============================ */
+
+              const story = collection.post;
+
+              return (
+                <article key={collection.key} className="standalone-story-card">
+                  <div className="standalone-story-number">
+                    {String(index + 1).padStart(2, "0")}
+                  </div>
+
+                  {story.cover_image ? (
+                    <Link
+                      href={`/blog/${story.slug}`}
+                      className="standalone-story-image"
+                    >
+                      <img src={story.cover_image} alt="" />
+                    </Link>
+                  ) : (
+                    <div className="standalone-story-symbol">✦</div>
+                  )}
+
+                  <div className="standalone-story-content">
+                    <div className="standalone-story-meta">
+                      <span>SHORT STORY</span>
+
+                      <span>{formatDate(story.published_at)}</span>
+                    </div>
+
+                    <Link href={`/blog/${story.slug}`}>
+                      <h2>{story.title}</h2>
+                    </Link>
+
+                    {story.excerpt && <p>{story.excerpt}</p>}
 
                     <Link
                       href={`/blog/${story.slug}`}
-                      className="story-row-arrow"
-                      aria-label={`Read ${story.title}`}
+                      className="standalone-story-read"
                     >
-                      <ArrowUpRight size={17} strokeWidth={1.2} />
+                      Read story
+                      <ArrowUpRight size={14} strokeWidth={1.2} />
                     </Link>
-                  </article>
-                ))}
-              </div>
-            )}
-          </>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
 
-        {/* CLOSING */}
+        {/* ====================================
+            END
+        ==================================== */}
 
-        {stories.length > 0 && (
+        {collections.length > 0 && (
           <div className="stories-closing">
             <span>✦</span>
 
