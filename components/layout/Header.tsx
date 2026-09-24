@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Search, X, ArrowUpRight } from "lucide-react";
+import { Menu, Search, X, ArrowUpRight, Feather } from "lucide-react";
 
 const navigation = [
   { number: "01", label: "Home", href: "/" },
@@ -41,11 +41,26 @@ export default function Header() {
 
   return (
     <>
+      {/* =====================================
+          HEADER
+      ===================================== */}
+
       <header className="site-header">
         <div className="header-inner">
-          <Link href="/" className="site-logo" onClick={closeMenu}>
-            Her Journal
-          </Link>
+          {/* BRAND */}
+
+          <div className="header-brand">
+            <Feather
+              className="header-brand-icon"
+              size={20}
+              strokeWidth={1.3}
+              aria-hidden="true"
+            />
+
+            <Link href="/" className="site-logo" onClick={closeMenu}>
+              Aashu
+            </Link>
+          </div>
 
           {/* DESKTOP NAVIGATION */}
 
@@ -71,7 +86,7 @@ export default function Header() {
             </Link>
           </nav>
 
-          {/* MOBILE BUTTON */}
+          {/* MOBILE MENU BUTTON */}
 
           <button
             type="button"
@@ -88,9 +103,9 @@ export default function Header() {
         </div>
       </header>
 
-      {/* ====================================
+      {/* =====================================
           MOBILE MENU
-      ==================================== */}
+      ===================================== */}
 
       <div
         className={`mobile-menu ${menuOpen ? "mobile-menu-open" : ""}`}
@@ -101,7 +116,7 @@ export default function Header() {
 
           <div className="mobile-menu-header">
             <Link href="/" className="mobile-menu-logo" onClick={closeMenu}>
-              Her Journal
+              Aashu
             </Link>
 
             <button
@@ -116,7 +131,7 @@ export default function Header() {
             </button>
           </div>
 
-          {/* LINKS */}
+          {/* NAVIGATION */}
 
           <nav
             id="mobile-navigation"
