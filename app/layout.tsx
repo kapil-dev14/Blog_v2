@@ -16,8 +16,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Her Journal",
-    template: "%s — Her Journal",
+    default: "Aashu - The Unwritten Verse",
+    template: "%s — My Blog",
   },
   description:
     "A personal space for stories, poems, thoughts and little moments.",
@@ -32,6 +32,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${cormorant.variable} ${inter.variable}`}>
         {children}
+        <Analytics />
       </body>
     </html>
   );
