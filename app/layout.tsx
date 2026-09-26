@@ -1,17 +1,26 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Inter } from "next/font/google";
+import { Fraunces, Manrope, Caveat } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
-const cormorant = Cormorant_Garamond({
+const fraunces = Fraunces({
   subsets: ["latin"],
   variable: "--font-serif",
+  weight: "variable",
+  style: ["normal", "italic"],
+  axes: ["opsz", "SOFT"],
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-sans",
   weight: ["400", "500", "600", "700"],
 });
 
-const inter = Inter({
+const caveat = Caveat({
   subsets: ["latin"],
-  variable: "--font-sans",
+  variable: "--font-script",
+  weight: ["500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -30,7 +39,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${cormorant.variable} ${inter.variable}`}>
+      <body
+        className={`${fraunces.variable} ${manrope.variable} ${caveat.variable}`}
+      >
         {children}
         <Analytics />
       </body>

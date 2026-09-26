@@ -232,30 +232,12 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       ================================= */}
 
       <div className="article-layout">
-        <aside className="article-side">
-          <span>
-            {isPoem
-              ? "VERSE"
-              : isChapter
-                ? `CHAPTER ${String(post.chapter_number).padStart(2, "0")}`
-                : "WORDS"}
-          </span>
-
-          <div />
-        </aside>
-
         <div
           className="article-content"
           dangerouslySetInnerHTML={{
             __html: post.content_html,
           }}
         />
-
-        <aside className="article-side article-side-right">
-          <div />
-
-          <span>✦</span>
-        </aside>
       </div>
 
       {/* =================================
